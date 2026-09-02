@@ -1,0 +1,17 @@
+{
+  "name": "@ezgameart/server",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ezgameart/shared": "workspace:*",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "elysia": "^1.4.0",
+    "zod": "^4.2.0"
+  }
+}

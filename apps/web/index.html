@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EZ 游戏美术素材加工器</title>
+    <script>
+      // 首屏前预读主题与语言，避免闪烁。键名与 src/localPrefs.ts 必须一致。
+      (function () {
+        function pref(name) {
+          try {
+            return localStorage.getItem("ezgameart-" + name);
+          } catch (e) {
+            return null;
+          }
+        }
+        var t = pref("theme");
+        document.documentElement.dataset.theme = t === "light" || t === "dark" ? t : "dark";
+        document.documentElement.lang = pref("lang") === "en" ? "en" : "zh-CN";
+      })();
+    </script>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div id="root">
+      <div class="boot-fallback" role="status">
+        <div class="boot-fallback__inner">
+          <div class="boot-fallback__eyebrow">EZ GAME ART ASSET PROCESSOR</div>
+          <h1>正在启动素材加工器…</h1>
+          <p>如果你是直接打开本地 HTML 文件，请先在项目目录运行 <code>bun start</code>，再访问本地服务地址。</p>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>

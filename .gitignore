@@ -1,0 +1,16 @@
+node_modules/
+storage/
+coverage/
+.venv-matting/
+.zcode/
+*.log
+.DS_Store
+.aider*
+.agents/
+
+# 本地产品文档：保留在工作区，不上传新仓库
+*.md
+*.mdx
+docs/
+
+# LICENSE 与字体 OFL.txt 属于授权文件，保留在仓库中
