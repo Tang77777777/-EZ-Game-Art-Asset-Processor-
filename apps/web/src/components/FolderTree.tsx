@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { ChevronDown, ChevronRight, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, FolderPlus, ListChecks, Pencil, Trash2, X } from "lucide-react";
 import type { Folder, FolderKind } from "../api";
 import { useT } from "../i18n";
 import { askConfirm, notify } from "../notice";
@@ -19,6 +19,7 @@ interface Props {
   onCreate: (name: string, parentId: string | null) => Promise<void>;
   onRename: (id: string, name: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onBatchDelete?: (ids: string[]) => Promise<void>;
   onMoveFolder: (id: string, parentId: string | null) => Promise<void>;
   /** 资源拖放到文件夹（null = 未分组） */
   onDropItems?: (folderId: string | null, ids: string[]) => void;
@@ -70,6 +71,7 @@ export default function FolderTree({
   onCreate,
   onRename,
   onDelete,
+  onBatchDelete,
   onMoveFolder,
   onDropItems,
 }: Props) {
@@ -80,6 +82,10 @@ export default function FolderTree({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; target: CtxTarget } | null>(null);
+  const [manageMode, setManageMode] = useState(false);
+  const [managedIds, setManagedIds] = useState<Set<string>>(() => new Set());
+
+  const folderById = useMemo(() => new Map(folders.map((folder) => [folder.id, folder])), [folders]);
 
   // 新建文件夹时默认展开祖先
   useEffect(() => {
@@ -91,6 +97,14 @@ export default function FolderTree({
       return next;
     });
   }, [folders]);
+
+  // 外部刷新目录树后，清掉已经不存在的勾选项。
+  useEffect(() => {
+    setManagedIds((prev) => {
+      const next = new Set([...prev].filter((id) => folderById.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [folderById]);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -139,6 +153,47 @@ export default function FolderTree({
     try {
       await onDelete(f.id);
       if (selected === f.id) onSelect("all");
+    } catch (e) {
+      notify(t("msg.delete_failed_msg", { msg: (e as Error).message }));
+    }
+  };
+
+  const toggleManaged = (id: string) => {
+    setManagedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isDescendantOf = (id: string, ancestorId: string) => {
+    const seen = new Set<string>();
+    let parentId = folderById.get(id)?.parent_id ?? null;
+    while (parentId && !seen.has(parentId)) {
+      if (parentId === ancestorId) return true;
+      seen.add(parentId);
+      parentId = folderById.get(parentId)?.parent_id ?? null;
+    }
+    return false;
+  };
+
+  const selectAllFolders = () => setManagedIds(new Set(folders.map((folder) => folder.id)));
+
+  const handleBatchDelete = async () => {
+    if (!onBatchDelete || !managedIds.size) return;
+    const ids = [...managedIds];
+    if (!(await askConfirm(t("msg.delete_n_folders_name_contents_move_up_resources_kept", { n: ids.length })))) return;
+    const selectedFolderWillBeDeleted =
+      typeof selected === "string" &&
+      selected !== "all" &&
+      selected !== "ungrouped" &&
+      ids.some((id) => id === selected || isDescendantOf(selected, id));
+    try {
+      await onBatchDelete(ids);
+      if (selectedFolderWillBeDeleted) onSelect("all");
+      setManagedIds(new Set());
+      setManageMode(false);
     } catch (e) {
       notify(t("msg.delete_failed_msg", { msg: (e as Error).message }));
     }
@@ -211,23 +266,25 @@ export default function FolderTree({
   const renderNode = (n: TreeNode, depth: number) => {
     const open = expanded.has(n.id);
     const isSel = selected === n.id;
+    const isManaged = managedIds.has(n.id);
     const isDrop = dropTarget === n.id;
     return (
       <div key={n.id} className="folder-node">
         <div
-          className={`folder-row ${isSel ? "on" : ""} ${isDrop ? "drop" : ""}`}
+          className={`folder-row ${isSel ? "on" : ""} ${isDrop ? "drop" : ""} ${manageMode ? "manage" : ""} ${isManaged ? "manage-selected" : ""}`}
           style={{ paddingLeft: 8 + depth * 12 }}
-          draggable
+          draggable={!manageMode}
           onDragStart={(e) => {
+            if (manageMode) return;
             e.dataTransfer.setData("application/x-ezgameart-folder", n.id);
             e.dataTransfer.effectAllowed = "move";
           }}
-          onDragOver={(e) => onDragOverRow(e, n.id)}
-          onDragLeave={() => setDropTarget((d) => (d === n.id ? null : d))}
-          onDrop={(e) => void onDropRow(e, n.id)}
-          onClick={() => onSelect(n.id)}
+          onDragOver={manageMode ? undefined : (e) => onDragOverRow(e, n.id)}
+          onDragLeave={manageMode ? undefined : () => setDropTarget((d) => (d === n.id ? null : d))}
+          onDrop={manageMode ? undefined : (e) => void onDropRow(e, n.id)}
+          onClick={() => (manageMode ? toggleManaged(n.id) : onSelect(n.id))}
           onContextMenu={(e) =>
-            openCtx(e, { kind: "folder", folder: n, hasChildren: n.children.length > 0, open })
+            !manageMode && openCtx(e, { kind: "folder", folder: n, hasChildren: n.children.length > 0, open })
           }
         >
           <button
@@ -241,6 +298,16 @@ export default function FolderTree({
           >
             {n.children.length ? open ? <ChevronDown size={12} /> : <ChevronRight size={12} /> : <span className="folder-twist-sp" />}
           </button>
+          {manageMode && (
+            <input
+              type="checkbox"
+              className="folder-select-check"
+              checked={isManaged}
+              aria-label={t("msg.select_folder_name", { name: n.name })}
+              onChange={() => toggleManaged(n.id)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
           {editingId === n.id ? (
             <input
               className="px-input folder-rename"
@@ -257,17 +324,19 @@ export default function FolderTree({
           ) : (
             <span className="folder-name">{n.name}</span>
           )}
-          <span className="folder-acts" onClick={(e) => e.stopPropagation()}>
-            <IconBtn title={t("msg.new_subfolder")} onClick={() => void handleCreate(n.id)}>
-              <FolderPlus size={12} />
-            </IconBtn>
-            <IconBtn title={t("msg.rename")} onClick={() => startRename(n)}>
-              <Pencil size={12} />
-            </IconBtn>
-            <IconBtn className="danger" title={t("msg.delete_folder")} onClick={() => void handleDelete(n)}>
-              <Trash2 size={12} />
-            </IconBtn>
-          </span>
+          {!manageMode && (
+            <span className="folder-acts" onClick={(e) => e.stopPropagation()}>
+              <IconBtn title={t("msg.new_subfolder")} onClick={() => void handleCreate(n.id)}>
+                <FolderPlus size={12} />
+              </IconBtn>
+              <IconBtn title={t("msg.rename")} onClick={() => startRename(n)}>
+                <Pencil size={12} />
+              </IconBtn>
+              <IconBtn className="danger" title={t("msg.delete_folder")} onClick={() => void handleDelete(n)}>
+                <Trash2 size={12} />
+              </IconBtn>
+            </span>
+          )}
         </div>
         {open && n.children.map((c) => renderNode(c, depth + 1))}
       </div>
@@ -275,29 +344,60 @@ export default function FolderTree({
   };
 
   return (
-    <aside className={`folder-tree pixel-panel${className ? ` ${className}` : ""}`} onContextMenu={(e) => openCtx(e, { kind: "root" })}>
-      <div className="folder-tree-head" onContextMenu={(e) => openCtx(e, { kind: "root" })}>
+    <aside className={`folder-tree pixel-panel${manageMode ? " manage-mode" : ""}${className ? ` ${className}` : ""}`} onContextMenu={(e) => !manageMode && openCtx(e, { kind: "root" })}>
+      <div className="folder-tree-head" onContextMenu={(e) => !manageMode && openCtx(e, { kind: "root" })}>
         <span>{title ?? t("msg.folders")}</span>
-        <IconBtn title={t("msg.new_folder")} onClick={() => void handleCreate(null)}>
-          <FolderPlus size={14} />
-        </IconBtn>
+        <span className="folder-tree-head-actions">
+          {onBatchDelete && (
+            <IconBtn
+              title={manageMode ? t("msg.exit_folder_management") : t("msg.manage_folders")}
+              onClick={() => {
+                setManageMode((value) => !value);
+                setManagedIds(new Set());
+                setEditingId(null);
+              }}
+            >
+              {manageMode ? <X size={14} /> : <ListChecks size={14} />}
+            </IconBtn>
+          )}
+          {!manageMode && (
+            <IconBtn title={t("msg.new_folder")} onClick={() => void handleCreate(null)}>
+              <FolderPlus size={14} />
+            </IconBtn>
+          )}
+        </span>
       </div>
+      {manageMode && (
+        <div className="folder-manage-bar">
+          <span className="folder-manage-count">{t("msg.selected_folders_count", { count: managedIds.size })}</span>
+          <div className="folder-manage-actions">
+            <button type="button" className="folder-manage-action" onClick={selectAllFolders}>
+              <Check size={12} /> {t("msg.select_all_folders")}
+            </button>
+            <button type="button" className="folder-manage-action danger" disabled={!managedIds.size} onClick={() => void handleBatchDelete()}>
+              <Trash2 size={12} /> {t("msg.delete_selected_folders")}
+            </button>
+          </div>
+        </div>
+      )}
       <button
         type="button"
-        className={`folder-row virtual ${selected === "all" ? "on" : ""}`}
-        onClick={() => onSelect("all")}
-        onContextMenu={(e) => openCtx(e, { kind: "all" })}
+        className={`folder-row virtual ${selected === "all" ? "on" : ""} ${manageMode ? "manage-disabled" : ""}`}
+        disabled={manageMode}
+        onClick={() => !manageMode && onSelect("all")}
+        onContextMenu={(e) => !manageMode && openCtx(e, { kind: "all" })}
       >
         <span className="folder-name">{t("msg.all")}</span>
       </button>
       <button
         type="button"
-        className={`folder-row virtual ${selected === "ungrouped" ? "on" : ""} ${dropTarget === "ungrouped" ? "drop" : ""}`}
-        onClick={() => onSelect("ungrouped")}
-        onDragOver={(e) => onDragOverRow(e, "ungrouped")}
-        onDragLeave={() => setDropTarget((d) => (d === "ungrouped" ? null : d))}
-        onDrop={(e) => void onDropRow(e, null)}
-        onContextMenu={(e) => openCtx(e, { kind: "ungrouped" })}
+        className={`folder-row virtual ${selected === "ungrouped" ? "on" : ""} ${dropTarget === "ungrouped" ? "drop" : ""} ${manageMode ? "manage-disabled" : ""}`}
+        disabled={manageMode}
+        onClick={() => !manageMode && onSelect("ungrouped")}
+        onDragOver={manageMode ? undefined : (e) => onDragOverRow(e, "ungrouped")}
+        onDragLeave={manageMode ? undefined : () => setDropTarget((d) => (d === "ungrouped" ? null : d))}
+        onDrop={manageMode ? undefined : (e) => void onDropRow(e, null)}
+        onContextMenu={(e) => !manageMode && openCtx(e, { kind: "ungrouped" })}
       >
         <span className="folder-name">{t("msg.ungrouped")}</span>
       </button>

@@ -3,7 +3,8 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import type { FolderKind } from "@ezgameart/shared";
 import { db, uid } from "../../db";
 import { broadcast } from "../../ws";
-import { ok, err, getFolderRow, collectDescendants, validateFolderParent, nextFolderSort } from "../helpers";
+import { ok, err, getFolderRow, validateFolderParent, nextFolderSort } from "../helpers";
+import { deleteFolderRoots } from "../../folderDeletion";
 
 export function register(server: McpServer) {
   server.registerTool(
@@ -98,21 +99,32 @@ export function register(server: McpServer) {
       const row = getFolderRow(folderId);
       if (!row) return err("文件夹不存在");
       const kind = row.kind as FolderKind;
-      const table = "materials";
-      const subtree = [...collectDescendants(folderId)];
-      const parentId = row.parent_id;
-      const tx = db.transaction(() => {
-        for (const fid of subtree) {
-          db.query(`UPDATE ${table} SET folder_id = ? WHERE folder_id = ?`).run(parentId, fid);
-        }
-        for (const fid of subtree) {
-          db.query("DELETE FROM folders WHERE id = ?").run(fid);
-        }
-      });
-      tx();
+      const result = deleteFolderRoots([folderId], kind);
+      if (!result.ok) return err(result.message);
       broadcast("folders_changed", { kind });
       broadcast("materials_changed", {});
       return ok({ ok: true });
+    }
+  );
+
+  server.registerTool(
+    "delete_folders",
+    {
+      title: "Delete Folders",
+      description:
+        "Delete multiple material folders in one operation. If a parent and child are both selected, only the parent is processed. Materials move to each deleted root's parent and are not deleted.",
+      inputSchema: z.object({
+        kind: z.enum(["material"]).describe("Folder kind"),
+        folderIds: z.array(z.string()).describe("Folder UUIDs to delete"),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    },
+    async ({ kind, folderIds }) => {
+      const result = deleteFolderRoots(folderIds, kind);
+      if (!result.ok) return err(result.message);
+      broadcast("folders_changed", { kind });
+      broadcast("materials_changed", {});
+      return ok(result);
     }
   );
 

@@ -1693,6 +1693,52 @@ input[type="range"] {
   margin-bottom: 6px;
   font-size: 12px;
 }
+.folder-tree-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.folder-manage-bar {
+  display: grid;
+  gap: 7px;
+  margin: 0 2px 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+}
+.folder-manage-count {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.folder-manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.folder-manage-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.folder-manage-action:hover:not(:disabled) {
+  border-color: var(--border-focused);
+  color: var(--accent);
+  background: var(--hover);
+}
+.folder-manage-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.folder-manage-action.danger {
+  color: var(--red);
+}
 .folder-tree-list {
   margin-top: 4px;
 }
@@ -1715,6 +1761,25 @@ input[type="range"] {
 }
 .folder-row.drop {
   outline: 2px dashed var(--accent);
+}
+.folder-row.manage {
+  cursor: pointer;
+}
+.folder-row.manage-selected {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--selected) 78%, transparent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.folder-row.manage-disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+.folder-select-check {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 0 1px;
+  accent-color: var(--accent);
 }
 .folder-row.virtual {
   margin-bottom: 2px;
@@ -4784,6 +4849,104 @@ body::after {
   color: var(--text);
   background: var(--selected);
   box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* 目录管理沿用侧栏的轻量状态语言：工具栏是分隔线，选中项只保留左侧强调。 */
+.app-shell--utility .folder-manage-bar {
+  display: grid;
+  gap: 8px;
+  margin: 0 4px 10px;
+  padding: 0 0 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+
+.app-shell--utility .folder-manage-count {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.app-shell--utility .folder-manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.app-shell--utility .folder-manage-action {
+  min-height: 30px;
+  min-width: 0;
+  justify-content: center;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--elevated);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.2;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.app-shell--utility .folder-manage-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  background: var(--hover);
+  color: var(--text);
+}
+
+.app-shell--utility .folder-manage-action.danger {
+  border-color: color-mix(in srgb, var(--error) 42%, var(--border));
+  background: color-mix(in srgb, var(--error) 7%, var(--elevated));
+  color: var(--error);
+}
+
+.app-shell--utility .folder-manage-action.danger:hover:not(:disabled) {
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 13%, var(--elevated));
+  color: var(--error);
+}
+
+.app-shell--utility .folder-manage-action:focus-visible,
+.app-shell--utility .folder-select-check:focus-visible {
+  outline: 2px solid var(--border-focused);
+  outline-offset: 2px;
+}
+
+.app-shell--utility .folder-row.manage-selected,
+.app-shell--utility .folder-row.manage-selected:hover {
+  color: var(--text);
+  background: var(--selected);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.app-shell--utility .folder-select-check {
+  appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0 2px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--elevated);
+  cursor: pointer;
+}
+
+.app-shell--utility .folder-select-check:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.app-shell--utility .folder-select-check:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--accent-contrast);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .app-shell--utility .folder-content {

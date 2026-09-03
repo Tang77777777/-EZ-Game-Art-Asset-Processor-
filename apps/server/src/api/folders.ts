@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { FOLDER_KINDS, type FolderKind } from "@ezgameart/shared";
 import { db, uid } from "../db";
 import { broadcast } from "../ws";
+import { deleteFolderRoots } from "../folderDeletion";
 
 type FolderRow = {
   id: string;
@@ -120,23 +121,29 @@ export const foldersApi = new Elysia({ prefix: "/api" })
     const row = getFolder(params.id);
     if (!row) return status(404, "文件夹不存在");
     const kind = row.kind as FolderKind;
-    const table = "materials";
-    const subtree = [...collectDescendants(params.id)];
-    const parentId = row.parent_id;
-    const tx = db.transaction(() => {
-      // 子树内资源上移到被删根节点的父级，再删整棵文件夹子树
-      for (const fid of subtree) {
-        db.query(`UPDATE ${table} SET folder_id = ? WHERE folder_id = ?`).run(parentId, fid);
-      }
-      for (const fid of subtree) {
-        db.query("DELETE FROM folders WHERE id = ?").run(fid);
-      }
-    });
-    tx();
+    const result = deleteFolderRoots([params.id], kind);
+    if (!result.ok) return status(result.status, result.message);
     broadcast("folders_changed", { kind });
     broadcast("materials_changed", {});
     return { ok: true };
   })
+  .post(
+    "/folders/batch-delete",
+    ({ body, status }) => {
+      if (!assertFolderKind(body.kind)) return status(400, `kind 须为 ${FOLDER_KINDS.join(" | ")}`);
+      const result = deleteFolderRoots(body.ids, body.kind);
+      if (!result.ok) return status(result.status, result.message);
+      broadcast("folders_changed", { kind: body.kind });
+      broadcast("materials_changed", {});
+      return result;
+    },
+    {
+      body: t.Object({
+        kind: t.String(),
+        ids: t.Array(t.String()),
+      }),
+    }
+  )
   .post(
     "/folders/move-items",
     ({ body, status }) => {

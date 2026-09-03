@@ -70,6 +70,7 @@ describe("MCP 端点", () => {
     expect(names).toContain("generate_materials");
     expect(names).toContain("get_config");
     expect(names).toContain("rename_material");
+    expect(names).toContain("delete_folders");
     const tool = json.result.tools.find((t: any) => t.name === "list_materials");
     expect(tool.description).toBeTruthy();
   });

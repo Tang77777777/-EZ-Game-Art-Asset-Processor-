@@ -142,6 +142,11 @@ export const api = {
   patchFolder: (id: string, body: { name?: string; parentId?: string | null }) =>
     req<OkResponse>(`/api/folders/${id}`, { method: "PATCH", ...json(body) }),
   deleteFolder: (id: string) => req<OkResponse>(`/api/folders/${id}`, { method: "DELETE" }),
+  batchDeleteFolders: (kind: FolderKind, ids: string[]) =>
+    req<OkResponse & { deleted: number }>("/api/folders/batch-delete", {
+      method: "POST",
+      ...json({ kind, ids }),
+    }),
   moveItems: (kind: FolderKind, ids: string[], folderId: string | null) =>
     req<OkResponse & { moved: number }>("/api/folders/move-items", {
       method: "POST",

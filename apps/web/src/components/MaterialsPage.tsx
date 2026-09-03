@@ -622,6 +622,11 @@ export default function MaterialsPage() {
           await loadFolders();
           await load();
         }}
+        onBatchDelete={async (ids) => {
+          await api.batchDeleteFolders("material", ids);
+          await loadFolders();
+          await load();
+        }}
         onMoveFolder={async (id, parentId) => {
           await api.patchFolder(id, { parentId });
           await loadFolders();

@@ -88,6 +88,37 @@ describe("素材重命名", () => {
   });
 });
 
+describe("文件夹批量删除", () => {
+  test("父子目录只处理一次，并把素材上移而不删除素材", async () => {
+    const rootId = crypto.randomUUID();
+    const childId = crypto.randomUUID();
+    const siblingId = crypto.randomUUID();
+    const materialInChild = crypto.randomUUID();
+    const materialInSibling = crypto.randomUUID();
+    const now = Date.now();
+    db.query("INSERT INTO folders (id, kind, parent_id, name, sort, created_at) VALUES (?, 'material', NULL, ?, 0, ?)").run(rootId, "根目录", now);
+    db.query("INSERT INTO folders (id, kind, parent_id, name, sort, created_at) VALUES (?, 'material', ?, ?, 0, ?)").run(childId, rootId, "子目录", now + 1);
+    db.query("INSERT INTO folders (id, kind, parent_id, name, sort, created_at) VALUES (?, 'material', NULL, ?, 1, ?)").run(siblingId, "并列目录", now + 2);
+    db.query("INSERT INTO materials (id, name, status, source, folder_id, metadata, created_at) VALUES (?, '子目录素材', 'raw', 'upload', ?, '{}', ?)").run(materialInChild, childId, now);
+    db.query("INSERT INTO materials (id, name, status, source, folder_id, metadata, created_at) VALUES (?, '并列素材', 'raw', 'upload', ?, '{}', ?)").run(materialInSibling, siblingId, now + 1);
+    try {
+      const response = await app.handle(new Request("http://localhost/api/folders/batch-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "material", ids: [rootId, childId, siblingId] }),
+      }));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ ok: true, deleted: 3 });
+      expect(db.query("SELECT id FROM folders WHERE id IN (?, ?, ?)").all(rootId, childId, siblingId)).toHaveLength(0);
+      expect(db.query("SELECT id, folder_id FROM materials WHERE id = ?").get(materialInChild)).toMatchObject({ id: materialInChild, folder_id: null });
+      expect(db.query("SELECT id, folder_id FROM materials WHERE id = ?").get(materialInSibling)).toMatchObject({ id: materialInSibling, folder_id: null });
+    } finally {
+      db.query("DELETE FROM materials WHERE id IN (?, ?)").run(materialInChild, materialInSibling);
+      db.query("DELETE FROM folders WHERE id IN (?, ?, ?)").run(rootId, childId, siblingId);
+    }
+  });
+});
+
 describe("SQLite 实体转换", () => {
   test("素材按扩展名推断媒体类型，并优先使用原始路径", () => {
     expect(serializeMaterial({
